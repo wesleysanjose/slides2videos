@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Vision Chat Bot</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            padding: 0;
+            background-color: #f4f4f4;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        .response {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #e2e2e2;
+            border: 1px solid #cccccc;
+            border-radius: 5px;
+        }
+        input, textarea {
+            width: calc(100% - 22px);
+            padding: 10px;
+            margin-top: 5px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #0056b3;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #004494;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Vision Chat Bot Interface</h2>
+        <input type="file" id="imageInput" accept="image/jpeg">
+        <textarea id="queryInput" placeholder="Enter your query here..."></textarea>
+        <button onclick="sendQuery()">Submit</button>
+        <div class="response" id="responseContainer">Response will appear here...</div>
+    </div>
+
+    <script>
+        function sendQuery() {
+            var formData = new FormData();
+            formData.append('image', document.getElementById('imageInput').files[0]);
+            formData.append('query', document.getElementById('queryInput').value);
+
+            fetch('http://localhost:5000/chat', {
+                method: 'POST',
+                body: formData,
+            })
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('responseContainer').textContent = 'Response: ' + data.response;
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                document.getElementById('responseContainer').textContent = 'Error: ' + error.message;
+            });
+        }
+    </script>
+</body>
+</html>

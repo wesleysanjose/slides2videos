@@ -3,12 +3,13 @@ from PIL import Image
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from flask import Flask, request, jsonify
 import io
+import argparse
 
 app = Flask(__name__)
 
 
 class VisionChatBot:
-    def __init__(self, model_path, precision='float16'):
+    def __init__(self, model_path, precision='int8'):
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
         # Set the data type based on precision
@@ -107,6 +108,19 @@ def clear():
     return jsonify({"message": "History cleared"}), 200
 
 
+def get_args():
+    parser = argparse.ArgumentParser(
+        description="Run the Vision Chat Bot server")
+    parser.add_argument('-m', '--model_path', type=str,
+                        default="THUDM/cogvlm2-llama3-chinese-chat-19B", help="Path of the model to load")
+    parser.add_argument('-ip', '--host', type=str, default='0.0.0.0',
+                        help="Host IP address to run the server on")
+    parser.add_argument('-port', '--port', type=int,
+                        default=6000, help="Port to run the server on")
+    return parser.parse_args()
+
+
 if __name__ == '__main__':
-    bot = VisionChatBot("THUDM/cogvlm2-llama3-chinese-chat-19B")
-    app.run(host='0.0.0.0', port=5000)
+    args = get_args()
+    bot = VisionChatBot(args.model_path)
+    app.run(host=args.host, port=args.port)

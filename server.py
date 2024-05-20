@@ -29,7 +29,7 @@ class VisionChatBot:
         )
         self.model = AutoModelForCausalLM.from_pretrained(
             model_path,
-            torch_dtype=torch.float32,  # Load in float32 for potential quantization
+            torch_dtype=torch.float16,  # Load in float32 for potential quantization
             trust_remote_code=True,
         ).to(self.device).eval()
 

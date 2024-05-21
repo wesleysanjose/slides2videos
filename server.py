@@ -10,91 +10,51 @@ import bitsandbytes as bnb
 app = Flask(__name__)
 
 
-class MultiGPUModelLoader:
-    def __init__(self, model_path, quantize_4bit=False, primary_gpu_mem_limit=20):
-        self.model_path = model_path
-        self.quantize_4bit = quantize_4bit
-        self.primary_gpu_mem_limit = primary_gpu_mem_limit * 1e9  # Convert GB to bytes
-        self.device0 = torch.device("cuda:0")
-        self.device1 = torch.device("cuda:1")
-
-    def load(self):
-        config = AutoConfig.from_pretrained(self.model_path)
-        model = AutoModelForCausalLM.from_config(config)
-
-        if self.quantize_4bit:
-            # Apply 4-bit quantization using bitsandbytes
-            model = bnb.nn.QuantLinear4bit.replace_all_linear(model)
-
-        # Initially load the model to the primary GPU
-        model = model.to(self.device0)
-        torch.cuda.empty_cache()  # Clear any residual memory
-
-        # Check if memory exceeds the limit
-        if torch.cuda.memory_allocated(self.device0) > self.primary_gpu_mem_limit:
-            # Split model layers if needed or move entirely
-            self.split_and_allocate(model)
-
-        return model
-
-    def split_and_allocate(self, model):
-        # This is a simplified version. You should implement this based on your model structure.
-        num_layers = len(list(model.children()))
-        split_point = num_layers // 2  # This is an arbitrary split point
-
-        first_half = nn.Sequential(
-            *list(model.children())[:split_point]).to(self.device0)
-        second_half = nn.Sequential(
-            *list(model.children())[split_point:]).to(self.device1)
-
-        # Reconstruct the model by manually handling the forward pass or using nn.ModuleList
-        self.model = nn.ModuleList([first_half, second_half])
-
-    def forward(self, x):
-        # Custom forward pass if you manually split layers
-        x = self.model[0](x.to(self.device0))
-        x = self.model[1](x.to(self.device1))
-        return x
-
-
 class VisionChatBot:
     def __init__(self, model_path, precision='4bit'):
-        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        # self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-        # Set the data type based on precision
-        if precision == 'float16':
-            self.torch_type = torch.float16
-        elif precision == 'bfloat16':
-            self.torch_type = torch.bfloat16
-        elif precision == 'int8':
-            self.torch_type = torch.int8
-        elif precision == '4bit':
-            self.torch_type = torch.float16
-        else:
-            raise ValueError(
-                "Unsupported precision type. Choose 'float16', 'bfloat16', 'int8', or '4bit'.")
+        # # Set the data type based on precision
+        # if precision == 'float16':
+        #     self.torch_type = torch.float16
+        # elif precision == 'bfloat16':
+        #     self.torch_type = torch.bfloat16
+        # elif precision == 'int8':
+        #     self.torch_type = torch.int8
+        # elif precision == '4bit':
+        #     self.torch_type = torch.float16
+        # else:
+        #     raise ValueError(
+        #         "Unsupported precision type. Choose 'float16', 'bfloat16', 'int8', or '4bit'.")
 
-        self.tokenizer = AutoTokenizer.from_pretrained(
-            model_path,
-            trust_remote_code=True
-        )
-        self.model = AutoModelForCausalLM.from_pretrained(
-            model_path,
-            torch_dtype=torch.float16,  # Load in float32 for potential quantization
-            trust_remote_code=True,
-        ).to(self.device).eval()
+        # self.tokenizer = AutoTokenizer.from_pretrained(
+        #     model_path,
+        #     trust_remote_code=True
+        # )
+        # self.model = AutoModelForCausalLM.from_pretrained(
+        #     model_path,
+        #     torch_dtype=torch.float16,  # Load in float32 for potential quantization
+        #     trust_remote_code=True,
+        # ).to(self.device).eval()
 
-        if self.torch_type == torch.int8:
-            # Apply quantization
-            self.model = torch.quantization.quantize_dynamic(
-                self.model, {torch.nn.Linear}, dtype=torch.qint8
-            )
-        elif self.torch_type == torch.float16 and precision == '4bit':
-            bnb.optim.GlobalOptimManager.get_instance().override_config('stable', True)
-            self.model = bnb.nn.QuantLinear4bit.replace_all_linear(self.model)
+        # if self.torch_type == torch.int8:
+        #     # Apply quantization
+        #     self.model = torch.quantization.quantize_dynamic(
+        #         self.model, {torch.nn.Linear}, dtype=torch.qint8
+        #     )
+        # elif self.torch_type == torch.float16 and precision == '4bit':
+        #     bnb.optim.GlobalOptimManager.get_instance().override_config('stable', True)
+        #     self.model = bnb.nn.Quan
+        from modules import models
+        import modules.shared as shared
+        shared.args.trust_remote_code = True
+        shared.args.load_in_4bit = True
+
+        self.model, self.tokenizer = models.load_model(
+            model_path, 'Transformers')
 
         # Convert to the specified precision
-        self.model = self.model.to(dtype=self.torch_type)
+        # self.model = self.model.to(dtype=self.torch_type)
 
         self.text_only_template = "A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions. USER: {} ASSISTANT:"
         self.history = []

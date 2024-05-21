@@ -155,11 +155,6 @@ def get_model_metadata(model):
             for k in settings[pat]:
                 model_settings[k] = settings[pat][k]
 
-    # Load instruction template if defined by name rather than by value
-    if model_settings['instruction_template'] != 'Custom (obtained from model metadata)':
-        model_settings['instruction_template_str'] = chat.load_instruction_template(
-            model_settings['instruction_template'])
-
     return model_settings
 
 

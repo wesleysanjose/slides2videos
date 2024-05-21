@@ -4,7 +4,7 @@ from pathlib import Path
 
 import yaml
 
-from modules import chat, loaders, metadata_gguf, shared, ui
+from modules import shared
 
 
 def get_fallback_settings():

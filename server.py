@@ -136,5 +136,5 @@ def get_args():
 
 if __name__ == '__main__':
     args = get_args()
-    bot = VisionChatBot(args.model_path)
+    bot = VisionChatBot(args.model)
     app.run(host=args.host, port=args.port)

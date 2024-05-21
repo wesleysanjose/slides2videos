@@ -4,12 +4,14 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 from flask import Flask, request, jsonify
 import io
 import argparse
+import bitsandbytes as bnb
+
 
 app = Flask(__name__)
 
 
 class VisionChatBot:
-    def __init__(self, model_path, precision='int8'):
+    def __init__(self, model_path, precision='4bit'):
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
         # Set the data type based on precision
@@ -19,9 +21,11 @@ class VisionChatBot:
             self.torch_type = torch.bfloat16
         elif precision == 'int8':
             self.torch_type = torch.int8
+        elif precision == '4bit':
+            self.torch_type = torch.float16
         else:
             raise ValueError(
-                "Unsupported precision type. Choose 'float16', 'bfloat16', or 'int8'.")
+                "Unsupported precision type. Choose 'float16', 'bfloat16', 'int8', or '4bit'.")
 
         self.tokenizer = AutoTokenizer.from_pretrained(
             model_path,
@@ -38,6 +42,9 @@ class VisionChatBot:
             self.model = torch.quantization.quantize_dynamic(
                 self.model, {torch.nn.Linear}, dtype=torch.qint8
             )
+        elif self.torch_type == torch.float16 and precision == '4bit':
+            bnb.optim.GlobalOptimManager.get_instance().override_config('stable', True)
+            self.model = bnb.nn.QuantLinear4bit.replace_all_linear(self.model)
 
         # Convert to the specified precision
         self.model = self.model.to(dtype=self.torch_type)
@@ -88,7 +95,7 @@ class VisionChatBot:
         self.history = []
 
 
-@app.route('/chat', methods=['POST'])
+@ app.route('/chat', methods=['POST'])
 def chat():
     if 'image' in request.files:
         image_file = request.files['image']
@@ -102,7 +109,7 @@ def chat():
     return jsonify({"response": response})
 
 
-@app.route('/clear', methods=['POST'])
+@ app.route('/clear', methods=['POST'])
 def clear():
     bot.clear_history()
     return jsonify({"message": "History cleared"}), 200

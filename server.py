@@ -125,7 +125,7 @@ def clear():
 def get_args():
     parser = argparse.ArgumentParser(
         description="Run the Vision Chat Bot server")
-    parser.add_argument('-m', '--model_path', type=str,
+    parser.add_argument('-m', '--model', type=str,
                         default="THUDM/cogvlm2-llama3-chinese-chat-19B", help="Path of the model to load")
     parser.add_argument('-ip', '--host', type=str, default='0.0.0.0',
                         help="Host IP address to run the server on")

@@ -96,6 +96,7 @@ def chat():
 @ app.route('/clear', methods=['POST'])
 def clear():
     logging.info("Clearing history")
+    print("Clearing history")
     try:
         bot.clear_history()
         return jsonify({"message": "History cleared"}), 200

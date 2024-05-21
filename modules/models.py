@@ -43,15 +43,6 @@ def load_model(model_name, loader=None):
     shared.model_name = model_name
     load_func_map = {
         'Transformers': huggingface_loader,
-        'AutoGPTQ': AutoGPTQ_loader,
-        'GPTQ-for-LLaMa': GPTQ_loader,
-        'llama.cpp': llamacpp_loader,
-        'llamacpp_HF': llamacpp_HF_loader,
-        'ExLlamav2': ExLlamav2_loader,
-        'ExLlamav2_HF': ExLlamav2_HF_loader,
-        'AutoAWQ': AutoAWQ_loader,
-        'QuIP#': QuipSharp_loader,
-        'HQQ': HQQ_loader,
     }
 
     metadata = get_model_metadata(model_name)

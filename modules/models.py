@@ -26,7 +26,6 @@ from transformers import (
 )
 
 import modules.shared as shared
-from modules import RoPE, sampler_hijack
 from modules.logging_colors import logger
 from modules.models_settings import get_model_metadata
 from modules.relative_imports import RelativeImport
@@ -34,8 +33,6 @@ from modules.relative_imports import RelativeImport
 transformers.logging.set_verbosity_error()
 
 local_rank = None
-
-sampler_hijack.hijack_samplers()
 
 
 def load_model(model_name, loader=None):
@@ -236,151 +233,11 @@ def huggingface_loader(model_name):
                     'Failed to disable exllama. Does the config.json for this model contain the necessary quantization info?')
                 print(exc)
 
-        if shared.args.compress_pos_emb > 1:
-            params['rope_scaling'] = {'type': 'linear',
-                                      'factor': shared.args.compress_pos_emb}
-        elif shared.args.alpha_value > 1:
-            params['rope_scaling'] = {'type': 'dynamic', 'factor': RoPE.get_alpha_value(
-                shared.args.alpha_value, shared.args.rope_freq_base)}
-
         logger.info("TRANSFORMERS_PARAMS=")
         pprint.PrettyPrinter(indent=4, sort_dicts=False).pprint(params)
         print()
         model = LoaderClass.from_pretrained(path_to_model, **params)
 
-    return model
-
-
-def llamacpp_loader(model_name):
-    from modules.llamacpp_model import LlamaCppModel
-
-    path = Path(f'{shared.args.model_dir}/{model_name}')
-    if path.is_file():
-        model_file = path
-    else:
-        model_file = list(
-            Path(f'{shared.args.model_dir}/{model_name}').glob('*.gguf'))[0]
-
-    logger.info(f"llama.cpp weights detected: \"{model_file}\"")
-    model, tokenizer = LlamaCppModel.from_pretrained(model_file)
-    return model, tokenizer
-
-
-def llamacpp_HF_loader(model_name):
-    from modules.llamacpp_hf import LlamacppHF
-
-    path = Path(f'{shared.args.model_dir}/{model_name}')
-
-    # Check if a HF tokenizer is available for the model
-    if all((path / file).exists() for file in ['tokenizer_config.json']):
-        logger.info(f'Using tokenizer from: \"{path}\"')
-    else:
-        logger.error(
-            "Could not load the model because a tokenizer in Transformers format was not found.")
-        return None, None
-
-    model = LlamacppHF.from_pretrained(model_name)
-    return model
-
-
-def AutoAWQ_loader(model_name):
-    from awq import AutoAWQForCausalLM
-
-    model_dir = Path(f'{shared.args.model_dir}/{model_name}')
-
-    model = AutoAWQForCausalLM.from_quantized(
-        quant_path=model_dir,
-        max_new_tokens=shared.args.max_seq_len,
-        trust_remote_code=shared.args.trust_remote_code,
-        fuse_layers=not shared.args.no_inject_fused_attention,
-        max_memory=get_max_memory_dict(),
-        batch_size=1,
-        safetensors=any(model_dir.glob('*.safetensors')),
-    )
-
-    return model
-
-
-def QuipSharp_loader(model_name):
-    try:
-        with RelativeImport("repositories/quip-sharp"):
-            from lib.utils.unsafe_import import model_from_hf_path
-    except:
-        logger.error(
-            "\nQuIP# has not been found. It must be installed manually for now.\n"
-            "For instructions on how to do that, please consult:\n"
-            "https://github.com/oobabooga/text-generation-webui/pull/4803\n"
-        )
-        return None, None
-
-    # This fixes duplicate logging messages after the import above.
-    handlers = logging.getLogger().handlers
-    if len(handlers) > 1:
-        logging.getLogger().removeHandler(handlers[1])
-
-    model_dir = Path(f'{shared.args.model_dir}/{model_name}')
-    if not all((model_dir / file).exists() for file in ['tokenizer_config.json', 'special_tokens_map.json', 'tokenizer.model']):
-        logger.error(
-            f"Could not load the model because the tokenizer files could not be found in the model folder. Please download the following files from the original (unquantized) model into {model_dir}: special_tokens_map.json, tokenizer.json, tokenizer.model, tokenizer_config.json.")
-        return None, None
-
-    model, model_str = model_from_hf_path(
-        model_dir,
-        use_cuda_graph=False,
-        use_flash_attn=not shared.args.no_flash_attn
-    )
-
-    return model
-
-
-def GPTQ_loader(model_name):
-
-    # Monkey patch
-    if shared.args.monkey_patch:
-        logger.warning(
-            "Applying the monkey patch for using LoRAs with GPTQ models. It may cause undefined behavior outside its intended scope.")
-        from modules.monkey_patch_gptq_lora import load_model_llama
-
-        model, _ = load_model_llama(model_name)
-
-    # No monkey patch
-    else:
-        import modules.GPTQ_loader
-
-        model = modules.GPTQ_loader.load_quantized(model_name)
-
-    return model
-
-
-def AutoGPTQ_loader(model_name):
-    import modules.AutoGPTQ_loader
-
-    return modules.AutoGPTQ_loader.load_quantized(model_name)
-
-
-def ExLlamav2_loader(model_name):
-    from modules.exllamav2 import Exllamav2Model
-
-    model, tokenizer = Exllamav2Model.from_pretrained(model_name)
-    return model, tokenizer
-
-
-def ExLlamav2_HF_loader(model_name):
-    from modules.exllamav2_hf import Exllamav2HF
-
-    return Exllamav2HF.from_pretrained(model_name)
-
-
-def HQQ_loader(model_name):
-    from hqq.core.quantize import HQQBackend, HQQLinear
-    from hqq.engine.hf import HQQModelForCausalLM
-
-    logger.info(
-        f"Loading HQQ model with backend: \"{shared.args.hqq_backend}\"")
-
-    model_dir = Path(f'{shared.args.model_dir}/{model_name}')
-    model = HQQModelForCausalLM.from_quantized(str(model_dir))
-    HQQLinear.set_backend(getattr(HQQBackend, shared.args.hqq_backend))
     return model
 
 

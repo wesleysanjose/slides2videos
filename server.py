@@ -5,46 +5,16 @@ from flask import Flask, request, jsonify
 import io
 import argparse
 import bitsandbytes as bnb
+import logging
 
+logging.basicConfig(level=logging.INFO)
 
 app = Flask(__name__)
 
 
 class VisionChatBot:
     def __init__(self, model_path, precision='4bit'):
-        # self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-        # # Set the data type based on precision
-        # if precision == 'float16':
-        #     self.torch_type = torch.float16
-        # elif precision == 'bfloat16':
-        #     self.torch_type = torch.bfloat16
-        # elif precision == 'int8':
-        #     self.torch_type = torch.int8
-        # elif precision == '4bit':
-        #     self.torch_type = torch.float16
-        # else:
-        #     raise ValueError(
-        #         "Unsupported precision type. Choose 'float16', 'bfloat16', 'int8', or '4bit'.")
-
-        # self.tokenizer = AutoTokenizer.from_pretrained(
-        #     model_path,
-        #     trust_remote_code=True
-        # )
-        # self.model = AutoModelForCausalLM.from_pretrained(
-        #     model_path,
-        #     torch_dtype=torch.float16,  # Load in float32 for potential quantization
-        #     trust_remote_code=True,
-        # ).to(self.device).eval()
-
-        # if self.torch_type == torch.int8:
-        #     # Apply quantization
-        #     self.model = torch.quantization.quantize_dynamic(
-        #         self.model, {torch.nn.Linear}, dtype=torch.qint8
-        #     )
-        # elif self.torch_type == torch.float16 and precision == '4bit':
-        #     bnb.optim.GlobalOptimManager.get_instance().override_config('stable', True)
-        #     self.model = bnb.nn.Quan
         from modules import models
         import modules.shared as shared
         shared.args.trust_remote_code = True
@@ -61,9 +31,13 @@ class VisionChatBot:
         self.image = None
 
     def set_image(self, image_file):
-        if image_file:
+        try:
             image_stream = io.BytesIO(image_file.read())
             self.image = Image.open(image_stream).convert('RGB')
+            logging.info("Image processed successfully")
+        except Exception as e:
+            logging.error(f"Failed to process image: {str(e)}")
+            raise
 
     def chat(self, query):
         if self.image is None:
@@ -105,21 +79,27 @@ class VisionChatBot:
 @ app.route('/chat', methods=['POST'])
 def chat():
     if 'image' in request.files:
-        image_file = request.files['image']
-    else:
-        image_file = None
+        try:
+            bot.set_image(request.files['image'])
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
     query = request.form.get('query')
     if not query:
         return jsonify({"error": "Query text is required"}), 400
-    bot.set_image(image_file)
-    response = bot.chat(query)
-    return jsonify({"response": response})
+    try:
+        response = bot.chat(query)
+        return jsonify({"response": response})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @ app.route('/clear', methods=['POST'])
 def clear():
-    bot.clear_history()
-    return jsonify({"message": "History cleared"}), 200
+    try:
+        bot.clear_history()
+        return jsonify({"message": "History cleared"}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 def get_args():

@@ -1,6 +1,6 @@
 import torch
 from PIL import Image
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoModelForCausalLM, AutoTokenizer, AutoConfig
 from flask import Flask, request, jsonify
 import io
 import argparse
@@ -8,6 +8,53 @@ import bitsandbytes as bnb
 
 
 app = Flask(__name__)
+
+
+class MultiGPUModelLoader:
+    def __init__(self, model_path, quantize_4bit=False, primary_gpu_mem_limit=20):
+        self.model_path = model_path
+        self.quantize_4bit = quantize_4bit
+        self.primary_gpu_mem_limit = primary_gpu_mem_limit * 1e9  # Convert GB to bytes
+        self.device0 = torch.device("cuda:0")
+        self.device1 = torch.device("cuda:1")
+
+    def load(self):
+        config = AutoConfig.from_pretrained(self.model_path)
+        model = AutoModelForCausalLM.from_config(config)
+
+        if self.quantize_4bit:
+            # Apply 4-bit quantization using bitsandbytes
+            model = bnb.nn.QuantLinear4bit.replace_all_linear(model)
+
+        # Initially load the model to the primary GPU
+        model = model.to(self.device0)
+        torch.cuda.empty_cache()  # Clear any residual memory
+
+        # Check if memory exceeds the limit
+        if torch.cuda.memory_allocated(self.device0) > self.primary_gpu_mem_limit:
+            # Split model layers if needed or move entirely
+            self.split_and_allocate(model)
+
+        return model
+
+    def split_and_allocate(self, model):
+        # This is a simplified version. You should implement this based on your model structure.
+        num_layers = len(list(model.children()))
+        split_point = num_layers // 2  # This is an arbitrary split point
+
+        first_half = nn.Sequential(
+            *list(model.children())[:split_point]).to(self.device0)
+        second_half = nn.Sequential(
+            *list(model.children())[split_point:]).to(self.device1)
+
+        # Reconstruct the model by manually handling the forward pass or using nn.ModuleList
+        self.model = nn.ModuleList([first_half, second_half])
+
+    def forward(self, x):
+        # Custom forward pass if you manually split layers
+        x = self.model[0](x.to(self.device0))
+        x = self.model[1](x.to(self.device1))
+        return x
 
 
 class VisionChatBot:
